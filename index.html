@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Harris for LACCD — Undervote Mobilization Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<style>
+  :root {
+    --bg:#0f1117;
+    --card:#1a1d2a;
+    --border:#2a2d3a;
+    --accent:#4f8cf7;
+    --accent2:#f7a64f;
+    --green:#34d399;
+    --red:#f87171;
+    --text:#e2e8f0;
+    --sub:#94a3b8;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    padding:24px;
+    line-height:1.5;
+  }
+  .header { text-align:center; margin-bottom:28px; }
+  .header h1 { font-size:1.8rem; font-weight:700; letter-spacing:-0.02em; }
+  .header p { color:var(--sub); font-size:0.9rem; margin-top:4px; }
+  .badge {
+    display:inline-block;
+    background:var(--accent);
+    color:#fff;
+    font-size:0.7rem;
+    padding:3px 8px;
+    border-radius:10px;
+    margin-left:8px;
+    vertical-align:middle;
+  }
+
+  /* ── KPI Row ── */
+  .kpi-row {
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:16px;
+    margin-bottom:28px;
+  }
+  .kpi-card {
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:20px;
+    text-align:center;
+  }
+  .kpi-card .label {
+    font-size:0.75rem;
+    color:var(--sub);
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    margin-bottom:6px;
+  }
+  .kpi-card .value { font-size:2rem; font-weight:700; }
+  .kpi-card .delta { font-size:0.8rem; margin-top:4px; }
+  .delta.pos { color:var(--green); }
+  .delta.neg { color:var(--red); }
+
+  /* WIN / LOSS card */
+  .kpi-card.outcome-win { border-color:var(--green); box-shadow:0 0 0 1px var(--green),0 4px 20px rgba(52,211,153,.15); }
+  .kpi-card.outcome-loss { border-color:var(--red); box-shadow:0 0 0 1px var(--red),0 4px 20px rgba(248,113,113,.15); }
+  .outcome-label { font-size:0.65rem; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:4px; }
+  .outcome-win .outcome-label { color:var(--green); }
+  .outcome-loss .outcome-label { color:var(--red); }
+  .outcome-icon { font-size:2rem; margin-bottom:4px; line-height:1; }
+
+  /* ── Scenario Buttons ── */
+  .scenario-row {
+    display:flex;
+    gap:10px;
+    justify-content:center;
+    margin-bottom:28px;
+    flex-wrap:wrap;
+  }
+  .scenario-btn {
+    padding:10px 24px;
+    border:1px solid var(--border);
+    border-radius:8px;
+    background:var(--card);
+    color:var(--text);
+    cursor:pointer;
+    font-size:0.85rem;
+    transition:all 0.2s;
+  }
+  .scenario-btn:hover { border-color:var(--accent); }
+  .scenario-btn.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+
+  /* ── District Sliders ── */
+  .districts-grid {
+    display:grid;
+    grid-template-columns:repeat(5,1fr);
+    gap:16px;
+    margin-bottom:28px;
+  }
+  .district-card {
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:18px;
+  }
+  .district-card h3 { font-size:0.9rem; margin-bottom:4px; }
+  .district-card .base-vote { font-size:0.75rem; color:var(--sub); margin-bottom:12px; }
+  .district-card input[type=range] { width:100%; accent-color:var(--accent); margin:8px 0; }
+  .district-card .range-labels { display:flex; justify-content:space-between; font-size:0.65rem; color:var(--sub); }
+  .district-card .captured { text-align:center; font-size:1.1rem; font-weight:600; margin-top:6px; color:var(--green); }
+
+  /* ── Viz / Charts ── */
+  .viz-row {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:20px;
+    margin-bottom:28px;
+  }
+  .viz-card {
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:20px;
+  }
+  .viz-card h3 { font-size:0.85rem; margin-bottom:12px; color:var(--sub); }
+  .viz-card canvas { max-height:300px; width:100% !important; height:100% !important; }
+
+  /* ── Summary Table ── */
+  .table-card {
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:20px;
+    margin-bottom:28px;
+    overflow-x:auto;
+  }
+  .table-card h3 { font-size:0.85rem; margin-bottom:12px; color:var(--sub); }
+  table { width:100%; border-collapse:collapse; font-size:0.8rem; }
+  th, td { padding:10px 12px; text-align:right; border-bottom:1px solid var(--border); }
+  th:first-child, td:first-child { text-align:left; }
+  th { color:var(--sub); font-weight:600; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.03em; }
+
+  /* ── Race Context Banner ── */
+  .race-banner {
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:18px 22px;
+    margin-bottom:28px;
+    font-size:0.82rem;
+    color:var(--sub);
+    line-height:1.6;
+  }
+  .race-banner strong { color:var(--text); }
+  .race-banner .opp { color:var(--accent2); font-weight:600; }
+
+  /* ── Strategy Notes ── */
+  .strategy-card {
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:20px;
+    margin-bottom:28px;
+  }
+  .strategy-card h3 { font-size:0.85rem; margin-bottom:12px; color:var(--sub); }
+  .strategy-list { list-style:none; display:flex; flex-direction:column; gap:8px; }
+  .strategy-list li { display:flex; gap:10px; font-size:0.8rem; color:var(--sub); line-height:1.5; }
+  .strategy-list li::before { content:'→'; color:var(--accent); font-weight:700; flex-shrink:0; }
+
+  /* ── Footer ── */
+  .footer { text-align:center; font-size:0.7rem; color:var(--sub); margin-top:8px; }
+  .highlight { color:var(--accent2); }
+
+  /* ── Responsive — industry standard breakpoints ── */
+
+  /* Large tablet / small desktop (≤1024px) */
+  @media (max-width:1024px) {
+    .districts-grid { grid-template-columns:repeat(3,1fr); }
+    .kpi-row { grid-template-columns:repeat(2,1fr); }
+    .viz-row { grid-template-columns:1fr; }
+    .viz-card { height:260px; min-height:260px; }
+  }
+
+  /* Tablet portrait (≤768px) */
+  @media (max-width:768px) {
+    body { padding: 20px 16px; }
+    .header h1 { font-size: 1.4rem; }
+    .header p { font-size: 0.82rem; }
+    .kpi-row { grid-template-columns:repeat(2,1fr); gap: 12px; }
+    .kpi-card { padding: 16px; }
+    .kpi-card .value { font-size: 1.6rem; }
+    .districts-grid { grid-template-columns:repeat(2,1fr); }
+    .district-card { padding: 14px; }
+    .district-card h3 { font-size: 0.85rem; }
+    .scenario-row { gap: 8px; }
+    .scenario-btn { padding: 8px 16px; font-size: 0.8rem; }
+    .viz-row { grid-template-columns:1fr; }
+    .viz-card { padding: 16px; height:220px; min-height:220px; }
+    .viz-card canvas { max-height: 240px; }
+  }
+
+  /* Mobile landscape (≤640px) */
+  @media (max-width:640px) {
+    body { padding: 16px 12px; }
+    .header { margin-bottom: 20px; }
+    .header h1 { font-size: 1.2rem; }
+    .kpi-row { grid-template-columns:1fr 1fr; gap: 10px; }
+    .kpi-card .value { font-size: 1.4rem; }
+    .kpi-card .label { font-size: 0.68rem; }
+    .districts-grid { grid-template-columns:1fr 1fr; }
+    .race-banner { padding: 14px 16px; font-size: 0.78rem; }
+    .strategy-card { padding: 16px; }
+    .strategy-list li { font-size: 0.76rem; }
+    .table-card { padding: 14px; }
+    table { font-size: 0.72rem; }
+    th, td { padding: 8px 10px; }
+  }
+
+  /* Mobile portrait (≤480px) */
+  @media (max-width:480px) {
+    body { padding: 12px 10px; }
+    .header h1 { font-size: 1.05rem; }
+    .badge { font-size: 0.62rem; padding: 2px 6px; }
+    .kpi-row { grid-template-columns:1fr; gap: 10px; }
+    .kpi-card { padding: 14px; }
+    .kpi-card .value { font-size: 1.8rem; }
+    .districts-grid { grid-template-columns:1fr; gap: 10px; }
+    .district-card { padding: 14px; }
+    .district-card .captured { font-size: 1rem; }
+    .scenario-row { gap: 6px; }
+    .scenario-btn { padding: 7px 12px; font-size: 0.75rem; }
+    .viz-card { padding: 14px; height:180px; min-height:180px; }
+    .viz-card canvas { max-height: 200px; }
+    .viz-card h3 { font-size: 0.78rem; }
+    .table-card { padding: 12px; }
+    table { font-size: 0.68rem; }
+    th, td { padding: 7px 8px; }
+    .strategy-card h3 { font-size: 0.78rem; }
+    .footer { font-size: 0.65rem; }
+    .race-banner { font-size: 0.74rem; padding: 12px 14px; }
+    /* Tooltip at mobile width */
+    .tt-text { width: 200px; max-width: 80vw; font-size: 0.7rem; }
+  }
+
+  /* Small mobile (≤375px) */
+  @media (max-width:375px) {
+    .kpi-card .value { font-size: 1.5rem; }
+    .header h1 { font-size: 0.95rem; }
+    .scenario-btn { padding: 6px 10px; font-size: 0.72rem; }
+    .tt-text { font-size: 0.68rem; padding: 7px 10px; }
+    .viz-card { height:160px; min-height:160px; }
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     TOOLTIP SYSTEM
+     ═══════════════════════════════════════════════════════════ */
+  .tt-wrap { position:relative; display:inline-block; }
+  .tooltip-term {
+    border-bottom:1px dotted var(--accent);
+    cursor:help;
+    color:inherit;
+    font-weight:inherit;
+    transition:border-color .15s;
+  }
+  .tooltip-term:hover { border-color:var(--accent2); }
+
+  /* Tooltip popup — white text on dark bg, NEVER inherits body text color */
+  .tt-text {
+    visibility:hidden;
+    opacity:0;
+    position:absolute;
+    bottom:calc(100% + 10px);
+    left:50%;
+    transform:translateX(-50%);
+    background:#0d1117;
+    color:#ffffff;
+    font-size:0.72rem;
+    line-height:1.5;
+    padding:9px 13px;
+    border-radius:8px;
+    white-space:normal;
+    width:230px;
+    max-width:88vw;
+    z-index:999;
+    pointer-events:none;
+    transition:opacity 0.2s, visibility 0.2s;
+    border:1px solid var(--border);
+    text-align:center;
+    box-shadow:0 6px 24px rgba(0,0,0,.5);
+  }
+  .tt-text::after {
+    content:'';
+    position:absolute;
+    top:100%;
+    left:50%;
+    transform:translateX(-50%);
+    border:6px solid transparent;
+    border-top-color:#0d1117;
+  }
+  /* Desktop hover */
+  .tt-wrap:hover .tt-text { visibility:visible; opacity:1; }
+  /* Mobile tap — JS toggles .tt-active */
+  .tt-wrap.tt-active .tt-text { visibility:visible; opacity:1; }
+  /* Flip tooltip above if near top of viewport */
+  .tt-text.flip-up { bottom:auto; top:calc(100% + 10px); }
+  .tt-text.flip-up::after { top:auto; bottom:100%; border-top-color:transparent; border-bottom-color:#0d1117; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Harris for LACCD — Undervote Mobilization Dashboard <span class="badge">LA County</span></h1>
+  <p>Based on 2026 General Election projections — November 3, 2026 | Source: <a href="https://politicaldata.vote/contest/superintendent-public-inst" style="color:var(--accent);">Political Data</a></p>
+</div>
+
+<!-- Race Context Banner -->
+<div class="race-banner">
+  <strong>General Election Race:</strong> Darryn Harris vs. a liberal opponent for the LA County Community College Board, Trustee Area 2. In a two-candidate race, <strong class="opp">winning comes down to raw vote count</strong> — reducing the undervote is the key lever. Every blank ballot you convert is a vote your opponent cannot get. Your mobilization strategy targets the full identified universe across all 5 districts with a layered contact stack: ads → peer-to-peer texts → canvassing → phone banking.
+</div>
+
+<div class="kpi-row" id="kpiRow"></div>
+
+<div class="scenario-row">
+  <button class="scenario-btn" data-scenario="conservative">Conservative (5%)</button>
+  <button class="scenario-btn active" data-scenario="moderate">Moderate (10%)</button>
+  <button class="scenario-btn" data-scenario="aggressive">Aggressive (15%)</button>
+  <button class="scenario-btn" data-scenario="custom">Custom</button>
+</div>
+
+<div class="districts-grid" id="districtsGrid"></div>
+
+<div class="viz-row">
+  <div class="viz-card">
+    <h3>Undervote Capture by District (Votes)</h3>
+    <canvas id="barChart"></canvas>
+  </div>
+  <div class="viz-card">
+    <h3>Mobilization Compounding Effect — D2</h3>
+    <canvas id="waterfallChart"></canvas>
+  </div>
+</div>
+
+<div class="table-card">
+  <h3>District-by-District Model Summary</h3>
+  <table id="summaryTable"></table>
+</div>
+
+<div class="strategy-card">
+  <h3>How This Strategy Wins the General Election</h3>
+  <ul class="strategy-list">
+    <li><strong>Build the universe</strong> — flag every undervote voter across all 5 districts via PoliticalData.vote. Prioritize buildings and blocks where the identified pool is densest, then concentrate volunteer deployment there.</li>
+    <li><strong>Prime with ads first</strong> — launch digital ad flights before and during weekend canvassing. Voters who see the ad before a canvasser knocks respond at higher rates. The ad is the first touch in your compounding stack.</li>
+    <li><strong>Text from trusted peers</strong> — Dem club volunteers text their own contacts. A text from someone you know is far more persuasive than a campaign blast. Each peer-to-peer message compounds the ad exposure already received.</li>
+    <li><strong>Canvass with social proof</strong> — door knockers reference the ad and the text. When a voter says "yeah, I got a text from Maria about this," the canvasser confirms it. That compounding effect closes the contact.</li>
+    <li><strong>Phone bank to convert the rest</strong> — follow-up calls to contacts made during canvassing reinforce all prior touches. Bookend every weekend with calls to anyone not reached in person.</li>
+    <li><strong>Opponent cannot counter</strong> — the white liberal opponent has a base but is unlikely to mobilize the undervote pool at the same rate. Your multi-channel stack is specifically designed to convert blank ballots into your votes at scale.</li>
+  </ul>
+</div>
+
+<div class="footer">
+  All data sourced from LA County 2026 General Election model via PoliticalData.vote. Undervote baseline: 19.1% countywide. Model assumes linear undervote capture proportional to mobilization effort intensity.
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   DATA MODEL
+   ═══════════════════════════════════════════════════════ */
+const districts = [
+  { id:'D1', name:'District 1', total:304134, harrisPct:15.0, undervotePct:19.1, undervoteDistAdj:1.00 },
+  { id:'D2', name:'District 2', total:319337, harrisPct:19.1, undervotePct:19.1, undervoteDistAdj:1.18 },
+  { id:'D3', name:'District 3', total:414882, harrisPct:16.8, undervotePct:19.1, undervoteDistAdj:0.95 },
+  { id:'D4', name:'District 4', total:367990, harrisPct:10.4, undervotePct:19.1, undervoteDistAdj:0.92 },
+  { id:'D5', name:'District 5', total:394044, harrisPct:13.6, undervotePct:19.1, undervoteDistAdj:1.05 }
+];
+const totalCountyVotes = districts.reduce((s,d)=>s+d.total,0);
+const totalHarrisVotes = districts.reduce((s,d)=>s+Math.round(d.total*d.harrisPct/100),0);
+const harrisPct = (totalHarrisVotes/totalCountyVotes*100).toFixed(1);
+
+let captureRates = [10,10,10,10,10];
+let barChart, waterfallChart;
+
+/* ═══════════════════════════════════════════════════════
+   TOOLTIP DEFINITIONS
+   ═══════════════════════════════════════════════════════ */
+const tooltips = {
+  pp:'Percentage points — the arithmetic difference between two percentages (e.g., a shift from 19.1% to 20.5% is +1.4 pp).',
+  rolloff:'Ballot roll-off — when a voter casts a ballot in higher-profile races but skips a down-ballot contest, leaving it blank.',
+  undervote:'A ballot cast with no vote recorded in the LACCD race — the voter participated in the election but skipped this contest. These are the voters your mobilization universe is built from.',
+  capture:'The estimated share of your identified undervote universe that your layered mobilization effort converts into Harris votes. A higher capture rate means more of the universe responds to the ad–text–canvass–phone stack.',
+  compounding:'The multiplier effect when multiple outreach methods hit the same voter in sequence — a targeted ad primes the universe, a text from a local Dem club volunteer they know reinforces it, a door knock seals it, and a follow-up call closes it. Each touch multiplies the persuasive power of every prior contact, producing gains far larger than any single channel alone.',
+  universe:'The target universe — identified undervote voters flagged through political data, prioritized by building and district density, then mobilized through the layered contact stack (ads, peer-to-peer texting, phone banking, door knocking).',
+  mobilization:'Layered outreach targeting your identified undervote universe — targeted digital ads, peer-to-peer texts from local Dem club volunteers (texting people they already know), phone banking, and door-to-door canvassing. Weekend sessions are bookended by ad flights, so the same message hits voters from every direction at once.',
+  harrisVotes:'Estimated votes for Harris in the 2026 General Election across LA County.',
+  d2:'Supervisorial District 2 — a key mobilization district containing a dense undervote universe across diverse communities.'
+};
+
+/* Build tooltip HTML string */
+function renderTooltip(term) {
+  const def = tooltips[term] || tooltips[term.toLowerCase()] || '';
+  return '<span class="tt-wrap"><span class="tooltip-term">'+term+'</span><span class="tt-text">'+def+'</span></span>';
+}
+
+/* Walk the DOM and wrap every .tooltip-term span that isn't already inside a .tt-wrap */
+function wrapAllTooltips() {
+  document.querySelectorAll('.tooltip-term').forEach(function(el) {
+    if (el.parentElement && el.parentElement.classList.contains('tt-wrap')) return;
+    const key = el.textContent.trim();
+    const def = tooltips[key] || tooltips[key.toLowerCase()] || tooltips['undervote'];
+    const wrap = document.createElement('span');
+    wrap.className = 'tt-wrap';
+    const clone = el.cloneNode(true);
+    const txt = document.createElement('span');
+    txt.className = 'tt-text';
+    txt.textContent = def;
+    wrap.appendChild(clone);
+    wrap.appendChild(txt);
+    el.parentNode.replaceChild(wrap, el);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════
+   MOBILE TAP HANDLER
+   ═══════════════════════════════════════════════════════ */
+document.addEventListener('click', function(e) {
+  const hit = e.target.closest('.tt-wrap');
+
+  document.querySelectorAll('.tt-wrap.tt-active').forEach(function(w) {
+    if (w !== hit) w.classList.remove('tt-active');
+  });
+
+  if (hit) {
+    e.preventDefault();
+    e.stopPropagation();
+    hit.classList.toggle('tt-active');
+
+    const txt = hit.querySelector('.tt-text');
+    if (txt && hit.classList.contains('tt-active')) {
+      const rect = txt.getBoundingClientRect();
+      if (rect.top < 15) txt.classList.add('flip-up');
+      else txt.classList.remove('flip-up');
+    }
+  } else {
+    document.querySelectorAll('.tt-wrap.tt-active').forEach(function(w) {
+      w.classList.remove('tt-active');
+    });
+  }
+});
+
+window.addEventListener('scroll', function() {
+  document.querySelectorAll('.tt-wrap.tt-active').forEach(function(w) {
+    w.classList.remove('tt-active');
+  });
+}, { passive: true });
+
+/* ═══════════════════════════════════════════════════════
+   CALCULATIONS
+   ═══════════════════════════════════════════════════════ */
+function calc() {
+  const results = districts.map(function(d,i) {
+    const undervotePool = Math.round(d.total * (d.undervotePct/100) * d.undervoteDistAdj);
+    const captured = Math.round(undervotePool * captureRates[i]/100);
+    const newHarris = Math.round(d.total*d.harrisPct/100) + captured;
+    const newPct = (newHarris/d.total*100);
+    return {
+      ...d,
+      undervotePool: undervotePool,
+      captured: captured,
+      newHarris: newHarris,
+      newPct: newPct,
+      harrisBase: Math.round(d.total*d.harrisPct/100)
+    };
+  });
+  const totalCaptured = results.reduce(function(s,r){ return s+r.captured; }, 0);
+  const totalNewHarris = results.reduce(function(s,r){ return s+r.newHarris; }, 0);
+  const newCountyPct = (totalNewHarris/totalCountyVotes*100);
+  return { results:results, totalCaptured:totalCaptured, totalNewHarris:totalNewHarris, newCountyPct:newCountyPct };
+}
+
+/* ═══════════════════════════════════════════════════════
+   UI RENDER
+   ═══════════════════════════════════════════════════════ */
+function updateUI() {
+  const { results, totalCaptured, totalNewHarris, newCountyPct } = calc();
+  const gapToClose = 40000;
+  const remaining = Math.max(0, gapToClose - totalCaptured);
+  const deltaPP = (newCountyPct - parseFloat(harrisPct)).toFixed(1);
+  const wins = totalCaptured >= gapToClose;
+
+  /* ── KPI Cards ── */
+  document.getElementById('kpiRow').innerHTML = ''+
+    '<div class="kpi-card">'+
+      '<div class="label">Harris Base Votes</div>'+
+      '<div class="value">'+totalHarrisVotes.toLocaleString()+'</div>'+
+      '<div class="delta">'+harrisPct+'% countywide</div>'+
+    '</div>'+
+    '<div class="kpi-card">'+
+      '<div class="label">Total '+renderTooltip('undervote')+' Pool</div>'+
+      '<div class="value">'+results.reduce(function(s,r){ return s+r.undervotePool; },0).toLocaleString()+'</div>'+
+      '<div class="delta pos">'+((results.reduce(function(s,r){ return s+r.undervotePool; },0))/totalCountyVotes*100).toFixed(1)+'% of ballots</div>'+
+    '</div>'+
+    '<div class="kpi-card">'+
+      '<div class="label">'+renderTooltip('capture')+' — New Harris Votes</div>'+
+      '<div class="value" style="color:var(--green)">+'+totalCaptured.toLocaleString()+'</div>'+
+      '<div class="delta pos">New share: '+newCountyPct.toFixed(1)+'% (+'+deltaPP+' '+renderTooltip('pp')+')</div>'+
+    '</div>'+
+    '<div class="kpi-card '+(wins?'outcome-win':'outcome-loss')+'">'+
+      '<div class="outcome-label">'+(wins?'✔ WIN':'✘ LOSS')+'</div>'+
+      '<div class="outcome-icon">'+(wins?'🏆':'⚠')+'</div>'+
+      '<div class="value" style="color:'+(wins?'var(--green)':'var(--red)')+'">'+(wins?'WIN':'LOSS')+'</div>'+
+      '<div class="delta '+(wins?'pos':'neg')+'">40K target | '+(wins?'Surplus: '+(totalCaptured-gapToClose).toLocaleString():'Need '+remaining.toLocaleString()+' more')+'</div>'+
+    '</div>';
+
+  /* ── District Sliders ── */
+  document.getElementById('districtsGrid').innerHTML = results.map(function(r,i) {
+    return '<div class="district-card">'+
+      '<h3>'+r.name+' <span style="font-size:0.7rem;color:var(--sub)">('+r.id+')</span></h3>'+
+      '<div class="base-vote">Base: '+r.harrisBase.toLocaleString()+' votes ('+r.harrisPct+'%) · Pool: '+r.undervotePool.toLocaleString()+'</div>'+
+      '<input type="range" min="0" max="25" value="'+captureRates[i]+'" step="0.5" oninput="updateSlider('+i+',this.value)" id="slider'+i+'">'+
+      '<div class="range-labels"><span>0%</span><span>'+captureRates[i]+'% '+renderTooltip('capture')+'</span><span>25%</span></div>'+
+      '<div class="captured">+'+r.captured.toLocaleString()+' votes → '+r.newHarris.toLocaleString()+' ('+r.newPct.toFixed(1)+'%)</div>'+
+    '</div>';
+  }).join('');
+
+  /* ── Summary Table ── */
+  document.getElementById('summaryTable').innerHTML = ''+
+    '<thead><tr>'+
+      '<th>District</th><th>Total Votes</th><th>Harris Base</th>'+
+      '<th>'+renderTooltip('undervote')+' Pool</th>'+
+      '<th>'+renderTooltip('capture')+' Rate</th>'+
+      '<th>New Votes</th><th>New Harris Total</th><th>New Share</th>'+
+    '</tr></thead>'+
+    '<tbody>'+results.map(function(r) {
+      return '<tr>'+
+        '<td><strong>'+r.name+'</strong></td>'+
+        '<td>'+r.total.toLocaleString()+'</td>'+
+        '<td>'+r.harrisBase.toLocaleString()+' ('+r.harrisPct+'%)</td>'+
+        '<td>'+r.undervotePool.toLocaleString()+'</td>'+
+        '<td><strong>'+captureRates[districts.indexOf(r)]+'%</strong></td>'+
+        '<td style="color:var(--green)">+'+r.captured.toLocaleString()+'</td>'+
+        '<td><strong>'+r.newHarris.toLocaleString()+'</strong></td>'+
+        '<td>'+r.newPct.toFixed(1)+'%</td>'+
+      '</tr>';
+    }).join('')+
+      '<tr style="border-top:2px solid var(--accent);font-weight:700;">'+
+        '<td><strong>COUNTY TOTAL</strong></td>'+
+        '<td>'+totalCountyVotes.toLocaleString()+'</td>'+
+        '<td>'+totalHarrisVotes.toLocaleString()+' ('+harrisPct+'%)</td>'+
+        '<td>'+results.reduce(function(s,r){ return s+r.undervotePool; },0).toLocaleString()+'</td>'+
+        '<td>—</td>'+
+        '<td style="color:var(--green)">+'+totalCaptured.toLocaleString()+'</td>'+
+        '<td>'+totalNewHarris.toLocaleString()+'</td>'+
+        '<td>'+newCountyPct.toFixed(1)+'%</td>'+
+      '</tr>'+
+    '</tbody>';
+
+  updateCharts(results);
+
+  /* Re-wrap tooltips on all dynamic content */
+  wrapAllTooltips();
+}
+
+/* Slider input handler */
+function updateSlider(idx, val) {
+  captureRates[idx] = parseFloat(val);
+  document.querySelectorAll('.scenario-btn').forEach(function(b){ b.classList.remove('active'); });
+  document.querySelector('[data-scenario="custom"]').classList.add('active');
+  updateUI();
+}
+
+/* ═══════════════════════════════════════════════════════
+   CHARTS
+   ═══════════════════════════════════════════════════════ */
+function updateCharts(results) {
+  const d2 = results[1];
+
+  /* Bar chart */
+  if (barChart) barChart.destroy();
+  const ctx1 = document.getElementById('barChart').getContext('2d');
+  barChart = new Chart(ctx1, {
+    type:'bar',
+    data:{
+      labels: results.map(function(r){ return r.name; }),
+      datasets:[
+        { label:'Harris Base Votes', data:results.map(function(r){ return r.harrisBase; }), backgroundColor:'#4f8cf780', borderColor:'#4f8cf7', borderWidth:1 },
+        { label:'New Captured Votes', data:results.map(function(r){ return r.captured; }), backgroundColor:'#34d39980', borderColor:'#34d399', borderWidth:1 }
+      ]
+    },
+    options:{
+      responsive:true,
+      plugins:{ legend:{ labels:{ color:'#94a3b8', usePointStyle:true } } },
+      scales:{
+        x:{ ticks:{ color:'#94a3b8' }, grid:{ color:'#2a2d3a' } },
+        y:{ ticks:{ color:'#94a3b8' }, grid:{ color:'#2a2d3a' }, title:{ display:true, text:'Votes', color:'#94a3b8' } }
+      }
+    }
+  });
+
+  /* Waterfall: compounding mobilization effect for D2 */
+  const baseRate = captureRates[1];
+  const pool = d2.undervotePool;
+  const adEffect = baseRate * 0.40;
+  const phoneEffect = baseRate * 0.35;
+  const doorEffect = baseRate * 0.15;
+  const compoundEffect = baseRate * 0.10;
+
+  if (waterfallChart) waterfallChart.destroy();
+  const ctx2 = document.getElementById('waterfallChart').getContext('2d');
+  waterfallChart = new Chart(ctx2, {
+    type:'bar',
+    data:{
+      labels:['Base Undervote','+ Targeted Ads','+ Phone/Text Banking','+ Door Knocking','+ Compounding (social proof)','Total Captured'],
+      datasets:[{
+        data:[
+          0,
+          Math.round(pool*adEffect/100),
+          Math.round(pool*phoneEffect/100),
+          Math.round(pool*doorEffect/100),
+          Math.round(pool*compoundEffect/100),
+          d2.captured
+        ],
+        backgroundColor:['#2a2d3a','#4f8cf780','#a78bfa80','#f7a64f80','#34d39980','#34d399'],
+        borderColor:['#2a2d3a','#4f8cf7','#a78bfa','#f7a64f','#34d399','#34d399'],
+        borderWidth:1
+      }]
+    },
+    options:{
+      responsive:true,
+      plugins:{ legend:{ display:false } },
+      scales:{
+        x:{ ticks:{ color:'#94a3b8', font:{ size:10 } }, grid:{ color:'#2a2d3a' } },
+        y:{ ticks:{ color:'#94a3b8' }, grid:{ color:'#2a2d3a' }, title:{ display:true, text:'Votes Captured', color:'#94a3b8' } }
+      }
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════
+   SCENARIO BUTTONS
+   ═══════════════════════════════════════════════════════ */
+document.querySelectorAll('.scenario-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.scenario-btn').forEach(function(b){ b.classList.remove('active'); });
+    this.classList.add('active');
+    const s = this.dataset.scenario;
+    if (s==='conservative') captureRates = [5,5,5,5,5];
+    else if (s==='moderate') captureRates = [10,10,10,10,10];
+    else if (s==='aggressive') captureRates = [15,15,15,15,15];
+    else captureRates = [10,10,10,10,10];
+    document.querySelectorAll('input[type=range]').forEach(function(sl,i){ sl.value = captureRates[i]; });
+    updateUI();
+  });
+});
+
+/* ── Init ── */
+updateUI();
+</script>
+</body>
+</html>
