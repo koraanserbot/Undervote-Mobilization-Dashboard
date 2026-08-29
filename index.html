@@ -125,9 +125,11 @@
     border:1px solid var(--border);
     border-radius:12px;
     padding:20px;
+    height:300px;
+    min-height:300px;
   }
   .viz-card h3 { font-size:0.85rem; margin-bottom:12px; color:var(--sub); }
-  .viz-card canvas { max-height:300px; width:100% !important; height:100% !important; }
+  .viz-card canvas { max-height:300px; width:100%; height:100%; }
 
   /* ── Summary Table ── */
   .table-card {
@@ -319,7 +321,7 @@
 
 <!-- Race Context Banner -->
 <div class="race-banner">
-  <strong>General Election Race:</strong> Darryn Harris vs. a liberal opponent for the LA County Community College Board, Trustee Area 2. In a two-candidate race, <strong class="opp">winning comes down to raw vote count</strong> — reducing the undervote is the key lever. Every blank ballot you convert is a vote your opponent cannot get. Your mobilization strategy targets the full identified universe across all 5 districts with a layered contact stack: ads → peer-to-peer texts → canvassing → phone banking.
+  <strong>General Election Race:</strong> Deana Harris vs. a single white liberal opponent for the LA County Community College Board, Trustee Area 2. In a two-candidate race, <strong class="opp">winning comes down to raw vote count</strong> — reducing the undervote is the key lever. Every blank ballot you convert is a vote your opponent cannot get. Your mobilization strategy targets the full identified universe across all 5 districts with a layered contact stack: ads → peer-to-peer texts → canvassing → phone banking.
 </div>
 
 <div class="kpi-row" id="kpiRow"></div>
@@ -533,13 +535,13 @@ function updateUI() {
       '<th>'+renderTooltip('capture')+' Rate</th>'+
       '<th>New Votes</th><th>New Harris Total</th><th>New Share</th>'+
     '</tr></thead>'+
-    '<tbody>'+results.map(function(r) {
+    '<tbody>'+results.map(function(r,i) {
       return '<tr>'+
         '<td><strong>'+r.name+'</strong></td>'+
         '<td>'+r.total.toLocaleString()+'</td>'+
         '<td>'+r.harrisBase.toLocaleString()+' ('+r.harrisPct+'%)</td>'+
         '<td>'+r.undervotePool.toLocaleString()+'</td>'+
-        '<td><strong>'+captureRates[districts.indexOf(r)]+'%</strong></td>'+
+        '<td><strong>'+captureRates[i]+'%</strong></td>'+
         '<td style="color:var(--green)">+'+r.captured.toLocaleString()+'</td>'+
         '<td><strong>'+r.newHarris.toLocaleString()+'</strong></td>'+
         '<td>'+r.newPct.toFixed(1)+'%</td>'+
@@ -591,6 +593,7 @@ function updateCharts(results) {
     },
     options:{
       responsive:true,
+      maintainAspectRatio:false,
       plugins:{ legend:{ labels:{ color:'#94a3b8', usePointStyle:true } } },
       scales:{
         x:{ ticks:{ color:'#94a3b8' }, grid:{ color:'#2a2d3a' } },
@@ -629,6 +632,7 @@ function updateCharts(results) {
     },
     options:{
       responsive:true,
+      maintainAspectRatio:false,
       plugins:{ legend:{ display:false } },
       scales:{
         x:{ ticks:{ color:'#94a3b8', font:{ size:10 } }, grid:{ color:'#2a2d3a' } },
